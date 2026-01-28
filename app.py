@@ -19,7 +19,7 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "username" not in st.session_state:
     st.session_state.username = ""
-# 🔹 NEW
+
 if "role" not in st.session_state:
     st.session_state.role = "user"
 
@@ -223,4 +223,5 @@ The Inventory Bot
 st.markdown("---")
 
 st.markdown("If you have any questions or want to report a bug, email the lead developer Pranat at: pranat32@gmail.com")
+
 
