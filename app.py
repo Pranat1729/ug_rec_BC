@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-#from pymongo import MongoClient
+from pymongo import MongoClient
 import smtplib
 from email.message import EmailMessage
 
@@ -223,3 +223,4 @@ The Inventory Bot
 st.markdown("---")
 
 st.markdown("If you have any questions or want to report a bug, email the lead developer Pranat at: pranat32@gmail.com")
+
