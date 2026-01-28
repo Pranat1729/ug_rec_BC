@@ -1,5 +1,4 @@
 streamlit
 pymongo
-smtplib
 pandas
-email.message
+
