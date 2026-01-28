@@ -1,0 +1,6 @@
+streamlit
+pymongo
+smtplib
+pandas
+numpy
+email.message
