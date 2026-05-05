@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from pymongo import MongoClient
 
-MONGO_URI = st.secrets['MONGO_URI']
+MONGO_URI = st.secrets['API_KEY']
 
 st.set_page_config(
     page_title="out_log",
