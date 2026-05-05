@@ -89,7 +89,11 @@ def add_school_item(
     })
 
 
+def delete_school_item(item_name):
 
+    school_inventory_col.delete_one({
+        "Item Name": item_name
+    })
 
 st.title("School Inventory")
 
@@ -205,14 +209,7 @@ if st.session_state.role == "admin":
                 )
 
                 st.rerun()
-
-else:
-
-    st.info(
-        "You have view-only access. "
-        "School inventory changes are restricted to admins."
-    )
-    st.markdown("---")
+                st.markdown("---")
 
     st.subheader(
         "Delete School Inventory Item"
@@ -239,3 +236,11 @@ else:
             )
 
             st.rerun()
+
+
+else:
+
+    st.info(
+        "You have view-only access. "
+        "School inventory changes are restricted to admins."
+    )
