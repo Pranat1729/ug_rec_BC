@@ -209,7 +209,7 @@ if st.session_state.role == "admin":
                 )
 
                 st.rerun()
-                st.markdown("---")
+    st.markdown("---")
 
     st.subheader(
         "Delete School Inventory Item"
