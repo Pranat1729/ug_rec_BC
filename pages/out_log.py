@@ -16,7 +16,6 @@ db = client["InventoryDB"]
 school_inventory_col = db["SchoolInventory"]
 
 
-# ---------- SESSION STATE ----------
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -28,7 +27,7 @@ if "role" not in st.session_state:
     st.session_state.role = "user"
 
 
-# ---------- LOGIN CHECK ----------
+
 
 if not st.session_state.logged_in:
     st.warning(
@@ -37,7 +36,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 
-# ---------- CREATE COLLECTION IF IT DOESN'T EXIST ----------
+
 
 existing_collections = db.list_collection_names()
 
@@ -55,8 +54,6 @@ if "SchoolInventory" not in existing_collections:
         "School Name": ""
     })
 
-
-# ---------- FUNCTIONS ----------
 
 def load_school_data():
 
@@ -92,7 +89,7 @@ def add_school_item(
     })
 
 
-# ---------- PAGE ----------
+
 
 st.title("School Inventory")
 
@@ -103,12 +100,10 @@ st.caption(
 )
 
 
-# ---------- LOAD DATA ----------
 
 school_df = load_school_data()
 
 
-# ---------- DISPLAY TABLE ----------
 
 st.subheader("Current School Inventory")
 
@@ -118,7 +113,7 @@ st.dataframe(
 )
 
 
-# ---------- SEARCH ----------
+
 
 st.subheader("Search School Inventory")
 
@@ -148,7 +143,7 @@ if search_school_item:
         )
 
 
-# ---------- ADMIN PANEL ----------
+
 
 if st.session_state.role == "admin":
 
@@ -217,3 +212,30 @@ else:
         "You have view-only access. "
         "School inventory changes are restricted to admins."
     )
+    st.markdown("---")
+
+    st.subheader(
+        "Delete School Inventory Item"
+    )
+
+    if not school_df.empty:
+
+        delete_selected = st.selectbox(
+            "Select item to delete",
+            school_df["Item Name"].tolist(),
+            key="school_delete"
+        )
+
+        if st.button(
+            "Delete School Item"
+        ):
+
+            delete_school_item(
+                delete_selected
+            )
+
+            st.warning(
+                f"Deleted '{delete_selected}'"
+            )
+
+            st.rerun()
