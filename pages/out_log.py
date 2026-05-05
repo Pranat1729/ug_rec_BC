@@ -5,7 +5,7 @@ from pymongo import MongoClient
 MONGO_URI = st.secrets['MONGO_URI']
 
 st.set_page_config(
-    page_title="School Inventory",
+    page_title="out_log",
     layout="wide"
 )
 
