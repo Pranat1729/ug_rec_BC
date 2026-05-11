@@ -1,3 +1,4 @@
+from hashlib import new
 import re
 import streamlit as st
 import pandas as pd
@@ -41,19 +42,21 @@ existing_collections = db.list_collection_names()
 if "SchoolInventory" not in existing_collections:
 
     school_inventory_col.insert_one({
-        "Item Name": "",
-        "Qty": 0,
         "School Name": "",
-        "Name": "",
-        "Email/Contact Info": ""
+        "Contact Name": "",
+        "Contact Info": "",
+        "Item Name": "",
+        "Quantity of Items Sent": 0,
+        "Date Sent": ""
     })
 
     school_inventory_col.delete_one({
-        "Item Name": "",
-        "Qty": 0,
         "School Name": "",
-        "Name": "",
-        "Email/Contact Info": ""
+        "Contact Name": "",
+        "Contact Info": "",
+        "Item Name": "",
+        "Quantity of Items Sent": 0,
+        "Date Sent": ""
     })
 
 
@@ -80,20 +83,24 @@ def load_school_data():
 
     if not data:
         return pd.DataFrame(
-            columns=["Item Name", "Qty", "School Name", "Name", "Email/Contact Info"]
+            columns=["School Name", "Contact Name", "Contact Info", "Item Name", "Quantity of Items Sent", "Date Sent"]
         )
 
     return pd.DataFrame(data)
 
 
-def add_school_item(item_name, qty, school_name, name, email_contact):
+
+
+
+def add_school_item(item_name, qty, school_name, name, email_contact, date_sent):
 
     school_inventory_col.insert_one({
-        "Item Name": item_name,
-        "Qty": qty,
         "School Name": school_name,
-        "Name": name,
-        "Email/Contact Info": email_contact
+        "Contact Name": name,
+        "Contact Info": email_contact,
+        "Item Name": item_name,
+        "Quantity of Items Sent": qty,
+        "Date Sent": str(date_sent)
     })
 
 
@@ -104,7 +111,7 @@ def delete_school_records_by_name(school_name):
     ).deleted_count
 
 
-def edit_school_info(school_name, new_item_name, new_qty, new_name, new_email_contact):
+def edit_school_info(school_name, new_item_name, new_qty, new_name, new_email_contact, new_date_sent):
     """
     Search by School Name (case-insensitive, whitespace-tolerant).
     Update any combination of: Item Name, Qty, Name, Email/Contact Info.
@@ -117,13 +124,16 @@ def edit_school_info(school_name, new_item_name, new_qty, new_name, new_email_co
         update_fields["Item Name"] = new_item_name
 
     if new_qty is not None:
-        update_fields["Qty"] = new_qty
+        update_fields["Quantity of Items Sent"] = new_qty
 
     if new_name:
-        update_fields["Name"] = new_name
+        update_fields["Contact Name"] = new_name
 
     if new_email_contact:
-        update_fields["Email/Contact Info"] = new_email_contact
+        update_fields["Contact Info"] = new_email_contact
+        
+    if new_date_sent is not None:
+        update_fields["Date Sent"] = str(new_date_sent)
 
     if not update_fields:
         return None
@@ -133,7 +143,7 @@ def edit_school_info(school_name, new_item_name, new_qty, new_name, new_email_co
         {"$set": update_fields}
     )
 
-
+school_df = load_school_data()
 
 
 st.title("School Inventory")
@@ -188,8 +198,9 @@ if st.session_state.role == "admin":
         school_item = st.text_input("Item Name")
         school_qty = st.number_input("Qty", min_value=0, step=1)
         school_name = st.text_input("School Name")
-        contact_name = st.text_input("Name")
-        contact_info = st.text_input("Email/Contact Info")
+        contact_name = st.text_input("Contact Name")
+        contact_info = st.text_input("Contact Info")
+        date_sent = st.date_input("Date Sent")
 
         submitted = st.form_submit_button("Add Item")
 
@@ -210,7 +221,8 @@ if st.session_state.role == "admin":
                     school_qty,
                     school_name,
                     contact_name,
-                    contact_info
+                    contact_info,
+                    date_sent
                 )
                 st.success(f"Added '{school_item}'")
                 st.rerun()
@@ -261,7 +273,13 @@ if st.session_state.role == "admin":
         new_item_name = st.text_input("New Item Name (leave blank to keep current)")
         new_qty_text = st.text_input("New Qty (leave blank to keep current)")
         new_contact_name = st.text_input("New Contact Name (leave blank to keep current)")
-        new_contact_info = st.text_input("New Email/Contact Info (leave blank to keep current)")
+        new_contact_info = st.text_input("New Contact Info (leave blank to keep current)")
+
+        update_date_sent = st.checkbox("Update Date Sent")
+        if update_date_sent:
+            new_date_sent = st.date_input("New Date Sent")
+        else:
+            new_date_sent = None
 
         edit_submitted = st.form_submit_button("Update School Info")
 
@@ -276,7 +294,7 @@ if st.session_state.role == "admin":
 
             if not school_name_to_edit:
                 st.error("School name cannot be empty.")
-            elif not any([new_item_name, new_qty_text, new_contact_name, new_contact_info]):
+            elif not any([new_item_name, new_qty_text, new_contact_name, new_contact_info, update_date_sent]):
                 st.error("Fill in at least one field to update.")
             else:
 
@@ -298,7 +316,8 @@ if st.session_state.role == "admin":
                         new_item_name,
                         new_qty,
                         new_contact_name,
-                        new_contact_info
+                        new_contact_info,
+                        new_date_sent
                     )
 
                     if result is None:
@@ -319,6 +338,18 @@ if st.session_state.role == "admin":
                         )
                         st.rerun()
 
+    st.markdown("---")
+    st.subheader("School Inventory Graphs")
+
+
+
+    if school_df.empty:
+        st.info("No data to display.")
+
+
+    item_counts = school_df.groupby("Item Name")["Quantity of Items Sent"].sum().reset_index()
+
+    st.bar_chart(item_counts.set_index("Item Name")["Quantity of Items Sent"])
 else:
 
     st.info(
