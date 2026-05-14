@@ -1,10 +1,11 @@
-from hashlib import new
-import re
 import streamlit as st
 import pandas as pd
 from pymongo import MongoClient
+from email.message import EmailMessage
+import smtplib
+from io import BytesIO
 
-MONGO_URI = st.secrets['API_KEY']
+MONGO_URI = st.secrets["API_KEY"]
 
 st.set_page_config(
     page_title="School Inventory",
@@ -14,10 +15,9 @@ st.set_page_config(
 client = MongoClient(MONGO_URI)
 
 db = client["InventoryDB"]
-
 school_inventory_col = db["SchoolInventory"]
 
-
+# ---------------- SESSION STATE ---------------- #
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -28,123 +28,127 @@ if "username" not in st.session_state:
 if "role" not in st.session_state:
     st.session_state.role = "user"
 
-
-
 if not st.session_state.logged_in:
     st.warning("Please log in from the main inventory page.")
     st.stop()
 
+# ---------------- HELPERS ---------------- #
 
+def normalize(text):
 
+    if text is None:
+        return ""
 
-existing_collections = db.list_collection_names()
-
-if "SchoolInventory" not in existing_collections:
-
-    school_inventory_col.insert_one({
-        "School Name": "",
-        "Contact Name": "",
-        "Contact Info": "",
-        "Item Name": "",
-        "Quantity of Items Sent": 0,
-        "Date Sent": ""
-    })
-
-    school_inventory_col.delete_one({
-        "School Name": "",
-        "Contact Name": "",
-        "Contact Info": "",
-        "Item Name": "",
-        "Quantity of Items Sent": 0,
-        "Date Sent": ""
-    })
-
-
-
-
-def normalize(s):
-    """Strip and collapse internal whitespace."""
-    return " ".join(s.split())
-
-
-def school_name_filter(school_name):
-    """Return a case-insensitive, whitespace-tolerant MongoDB filter."""
-    return {
-        "School Name": {
-            "$regex": f"^\\s*{re.escape(normalize(school_name))}\\s*$",
-            "$options": "i"
-        }
-    }
-
+    return " ".join(str(text).strip().split())
 
 def load_school_data():
 
-    data = list(school_inventory_col.find({}, {"_id": 0}))
+    data = list(
+        school_inventory_col.find({}, {"_id": 0})
+    )
+
+    columns = [
+        "School Name",
+        "Contact Name",
+        "Contact Info",
+        "Item Name",
+        "Quantity of Items Sent",
+        "Date Sent"
+    ]
 
     if not data:
-        return pd.DataFrame(
-            columns=["School Name", "Contact Name", "Contact Info", "Item Name", "Quantity of Items Sent", "Date Sent"]
-        )
+        return pd.DataFrame(columns=columns)
 
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
 
+    for col in columns:
+        if col not in df.columns:
+            df[col] = ""
 
+    return df[columns]
 
+def get_school_options(df):
 
+    if df.empty:
+        return []
 
-def add_school_item(item_name, qty, school_name, name, email_contact, date_sent):
+    return sorted(
+        df["School Name"]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+
+# ---------------- DATABASE OPS ---------------- #
+
+def add_school_item(
+    item_name,
+    qty,
+    school_name,
+    contact_name,
+    contact_info,
+    date_sent
+):
 
     school_inventory_col.insert_one({
-        "School Name": school_name,
-        "Contact Name": name,
-        "Contact Info": email_contact,
-        "Item Name": item_name,
-        "Quantity of Items Sent": qty,
+        "School Name": normalize(school_name),
+        "Contact Name": normalize(contact_name),
+        "Contact Info": normalize(contact_info),
+        "Item Name": normalize(item_name),
+        "Quantity of Items Sent": int(qty),
         "Date Sent": str(date_sent)
     })
 
+def delete_school_records(school_name):
 
-def delete_school_records_by_name(school_name):
+    result = school_inventory_col.delete_many({
+        "School Name": school_name
+    })
 
-    return school_inventory_col.delete_many(
-        school_name_filter(school_name)
-    ).deleted_count
+    return result.deleted_count
 
-
-def edit_school_info(school_name, new_item_name, new_qty, new_name, new_email_contact, new_date_sent):
-    """
-    Search by School Name (case-insensitive, whitespace-tolerant).
-    Update any combination of: Item Name, Qty, Name, Email/Contact Info.
-    Returns the pymongo UpdateResult, or None if no fields to update.
-    """
+def edit_school_info(
+    school_name,
+    new_item_name,
+    new_qty,
+    new_contact_name,
+    new_contact_info,
+    new_date_sent
+):
 
     update_fields = {}
 
     if new_item_name:
-        update_fields["Item Name"] = new_item_name
+        update_fields["Item Name"] = normalize(new_item_name)
 
     if new_qty is not None:
-        update_fields["Quantity of Items Sent"] = new_qty
+        update_fields["Quantity of Items Sent"] = int(new_qty)
 
-    if new_name:
-        update_fields["Contact Name"] = new_name
+    if new_contact_name:
+        update_fields["Contact Name"] = normalize(new_contact_name)
 
-    if new_email_contact:
-        update_fields["Contact Info"] = new_email_contact
-        
+    if new_contact_info:
+        update_fields["Contact Info"] = normalize(new_contact_info)
+
     if new_date_sent is not None:
         update_fields["Date Sent"] = str(new_date_sent)
 
     if not update_fields:
         return None
 
-    return school_inventory_col.update_many(
-        school_name_filter(school_name),
+    result = school_inventory_col.update_many(
+        {"School Name": school_name},
         {"$set": update_fields}
     )
 
+    return result
+
+# ---------------- LOAD DATA ---------------- #
+
 school_df = load_school_data()
 
+# ---------------- UI ---------------- #
 
 st.title("School Inventory")
 
@@ -152,70 +156,107 @@ st.caption(
     f"Logged in as {st.session_state.username} ({st.session_state.role})"
 )
 
-
-
-
-school_df = load_school_data()
-
-
-
+# ---------------- TABLE ---------------- #
 
 st.subheader("Current School Inventory")
 
-st.dataframe(school_df, use_container_width=True)
+st.dataframe(
+    school_df,
+    use_container_width=True
+)
 
-
-
+# ---------------- SEARCH ---------------- #
 
 st.subheader("Search School Inventory")
 
-search_school_item = st.text_input("Search by item name")
+search_school_item = st.text_input(
+    "Search by Item Name"
+)
 
 if search_school_item:
 
+    search_school_item = normalize(
+        search_school_item
+    ).lower()
+
     result = school_df[
-        school_df["Item Name"].str.lower() == search_school_item.lower()
+        school_df["Item Name"]
+        .astype(str)
+        .str.lower()
+        .str.strip()
+        == search_school_item
     ]
 
     if result.empty:
         st.warning("Item not found.")
     else:
-        st.success("Item found:")
-        st.dataframe(result, use_container_width=True)
+        st.success("Item found.")
+        st.dataframe(
+            result,
+            use_container_width=True
+        )
 
-
+# ---------------- ADMIN ---------------- #
 
 if st.session_state.role == "admin":
 
+    school_options = get_school_options(
+        school_df
+    )
+
+    # ---------- ADD ---------- #
+
     st.markdown("---")
-
-    
-
     st.subheader("Add School Inventory Item")
 
     with st.form("add_school_item_form"):
 
-        school_item = st.text_input("Item Name")
-        school_qty = st.number_input("Qty", min_value=0, step=1)
-        school_name = st.text_input("School Name")
-        contact_name = st.text_input("Contact Name")
-        contact_info = st.text_input("Contact Info")
-        date_sent = st.date_input("Date Sent")
+        school_item = st.text_input(
+            "Item Name"
+        )
 
-        submitted = st.form_submit_button("Add Item")
+        school_qty = st.number_input(
+            "Qty",
+            min_value=0,
+            step=1
+        )
+
+        school_name = st.text_input(
+            "School Name"
+        )
+
+        contact_name = st.text_input(
+            "Contact Name"
+        )
+
+        contact_info = st.text_input(
+            "Contact Info"
+        )
+
+        date_sent = st.date_input(
+            "Date Sent"
+        )
+
+        submitted = st.form_submit_button(
+            "Add Item"
+        )
 
         if submitted:
 
-            school_item = school_item.strip()
-            school_name = school_name.strip()
-            contact_name = contact_name.strip()
-            contact_info = contact_info.strip()
+            if not normalize(school_item):
 
-            if not school_item:
-                st.error("Item name cannot be empty.")
-            elif not school_name:
-                st.error("School name cannot be empty.")
+                st.error(
+                    "Item name cannot be empty."
+                )
+
+            elif not normalize(school_name):
+
+                st.error(
+                    "School name cannot be empty."
+                )
+
             else:
+
                 add_school_item(
                     school_item,
                     school_qty,
@@ -224,135 +265,261 @@ if st.session_state.role == "admin":
                     contact_info,
                     date_sent
                 )
-                st.success(f"Added '{school_item}'")
+
+                st.success(
+                    "Item added successfully."
+                )
+
                 st.rerun()
 
-
+    # ---------- DELETE ---------- #
 
     st.markdown("---")
     st.subheader("Delete School Records")
 
-    with st.form("delete_school_by_name_form"):
+    if school_options:
 
-        school_name_to_delete = st.text_input("School Name to delete")
+        with st.form("delete_school_form"):
 
-        delete_submitted = st.form_submit_button("Delete School Records")
+            selected_school_delete = st.selectbox(
+                "Select School",
+                school_options
+            )
 
-        if delete_submitted:
+            delete_submitted = st.form_submit_button(
+                "Delete Records"
+            )
 
-            school_name_to_delete = school_name_to_delete.strip()
+            if delete_submitted:
 
-            if not school_name_to_delete:
-                st.error("School name cannot be empty.")
-            else:
-                deleted_count = delete_school_records_by_name(school_name_to_delete)
+                deleted_count = delete_school_records(
+                    selected_school_delete
+                )
 
-                if deleted_count:
+                if deleted_count > 0:
+
                     st.success(
-                        f"Deleted {deleted_count} record(s) for '{school_name_to_delete}'."
+                        f"Deleted {deleted_count} record(s)."
                     )
+
                     st.rerun()
+
                 else:
+
                     st.warning(
-                        f"No records found for '{school_name_to_delete}'."
+                        "No records found."
                     )
 
+    else:
 
+        st.info("No schools available.")
+
+    # ---------- EDIT ---------- #
 
     st.markdown("---")
     st.subheader("Edit School Info")
 
-    st.caption(
-        "Enter the School Name to find records, then fill in only the fields you want to change."
-    )
+    if school_options:
 
-    with st.form("edit_school_info_form"):
+        with st.form("edit_school_form"):
 
-        school_name_to_edit = st.text_input("School Name (used to find records)")
+            selected_school_edit = st.selectbox(
+                "Select School to Edit",
+                school_options
+            )
 
-        new_item_name = st.text_input("New Item Name (leave blank to keep current)")
-        new_qty_text = st.text_input("New Qty (leave blank to keep current)")
-        new_contact_name = st.text_input("New Contact Name (leave blank to keep current)")
-        new_contact_info = st.text_input("New Contact Info (leave blank to keep current)")
+            new_item_name = st.text_input(
+                "New Item Name"
+            )
 
-        update_date_sent = st.checkbox("Update Date Sent")
-        if update_date_sent:
-            new_date_sent = st.date_input("New Date Sent")
-        else:
+            new_qty_text = st.text_input(
+                "New Quantity"
+            )
+
+            new_contact_name = st.text_input(
+                "New Contact Name"
+            )
+
+            new_contact_info = st.text_input(
+                "New Contact Info"
+            )
+
+            update_date = st.checkbox(
+                "Update Date"
+            )
+
             new_date_sent = None
 
-        edit_submitted = st.form_submit_button("Update School Info")
+            if update_date:
 
-        if edit_submitted:
+                new_date_sent = st.date_input(
+                    "New Date Sent"
+                )
 
-            # Normalize all inputs
-            school_name_to_edit = normalize(school_name_to_edit)
-            new_item_name = new_item_name.strip()
-            new_qty_text = new_qty_text.strip()
-            new_contact_name = new_contact_name.strip()
-            new_contact_info = new_contact_info.strip()
+            edit_submitted = st.form_submit_button(
+                "Update"
+            )
 
-            if not school_name_to_edit:
-                st.error("School name cannot be empty.")
-            elif not any([new_item_name, new_qty_text, new_contact_name, new_contact_info, update_date_sent]):
-                st.error("Fill in at least one field to update.")
-            else:
+            if edit_submitted:
 
-                # Validate qty
                 new_qty = None
-                qty_error = False
 
-                if new_qty_text:
+                if normalize(new_qty_text):
+
                     if new_qty_text.isdigit():
-                        new_qty = int(new_qty_text)
+
+                        new_qty = int(
+                            new_qty_text
+                        )
+
                     else:
-                        st.error("Qty must be a whole number.")
-                        qty_error = True
 
-                if not qty_error:
+                        st.error(
+                            "Quantity must be a whole number."
+                        )
 
-                    result = edit_school_info(
-                        school_name_to_edit,
-                        new_item_name,
-                        new_qty,
-                        new_contact_name,
-                        new_contact_info,
-                        new_date_sent
+                        st.stop()
+
+                result = edit_school_info(
+                    selected_school_edit,
+                    new_item_name,
+                    new_qty,
+                    new_contact_name,
+                    new_contact_info,
+                    new_date_sent
+                )
+
+                if result is None:
+
+                    st.error(
+                        "No fields provided to update."
                     )
 
-                    if result is None:
-                        st.error("No update fields provided.")
-                    elif result.matched_count == 0:
-                        st.warning(
-                            f"No records found for '{school_name_to_edit}'. "
-                            "Check the spelling matches exactly what's in the table above."
-                        )
-                    elif result.modified_count == 0:
-                        st.info(
-                            f"Records found for '{school_name_to_edit}', "
-                            "but the data was already identical — nothing changed."
-                        )
-                    else:
-                        st.success(
-                            f"Updated {result.modified_count} record(s) for '{school_name_to_edit}'."
-                        )
-                        st.rerun()
+                elif result.modified_count == 0:
+
+                    st.info(
+                        "Nothing changed."
+                    )
+
+                else:
+
+                    st.success(
+                        f"Updated {result.modified_count} record(s)."
+                    )
+
+                    st.rerun()
+
+    else:
+
+        st.info("No schools available.")
+
+    # ---------- EMAIL ---------- #
 
     st.markdown("---")
-    st.subheader("School Inventory Graphs")
+    st.subheader("Email Inventory")
 
+    with st.form("email_form"):
 
+        recipient_email = st.text_input(
+            "Recipient Email"
+        )
 
-    if school_df.empty:
-        st.info("No data to display.")
+        email_subject = st.text_input(
+            "Email Subject"
+        )
 
+        email_body = st.text_area(
+            "Email Body"
+        )
 
-    item_counts = school_df.groupby("Item Name")["Quantity of Items Sent"].sum().reset_index()
+        email_submitted = st.form_submit_button(
+            "Send Email"
+        )
 
-    st.bar_chart(item_counts.set_index("Item Name")["Quantity of Items Sent"])
-else:
+        if email_submitted:
 
-    st.info(
-        "You have view-only access. "
-        "School inventory changes are restricted to admins."
-    )
+            recipient_email = normalize(
+                recipient_email
+            )
+
+            email_subject = normalize(
+                email_subject
+            )
+
+            email_body = email_body.strip()
+
+            if not recipient_email:
+
+                st.error(
+                    "Recipient email required."
+                )
+
+            elif not email_subject:
+
+                st.error(
+                    "Subject required."
+                )
+
+            elif not email_body:
+
+                st.error(
+                    "Body required."
+                )
+
+            else:
+
+                try:
+
+                    fresh_df = load_school_data()
+
+                    msg = EmailMessage()
+
+                    msg["Subject"] = email_subject
+                    msg["From"] = st.secrets["EMAIL_ADDRESS"]
+                    msg["To"] = recipient_email
+
+                    msg.set_content(email_body)
+
+                    excel_buffer = BytesIO()
+
+                    with pd.ExcelWriter(
+                        excel_buffer,
+                        engine="openpyxl"
+                    ) as writer:
+
+                        fresh_df.to_excel(
+                            writer,
+                            index=False,
+                            sheet_name="Inventory"
+                        )
+
+                    excel_buffer.seek(0)
+
+                    msg.add_attachment(
+                        excel_buffer.read(),
+                        maintype="application",
+                        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        filename="school_inventory.xlsx"
+                    )
+
+                    with smtplib.SMTP_SSL(
+                        "smtp.gmail.com",
+                        465
+                    ) as server:
+
+                        server.login(
+                            st.secrets["EMAIL_ADDRESS"],
+                            st.secrets["EMAIL_PASSWORD"]
+                        )
+
+                        server.send_message(msg)
+
+                    st.success(
+                        "Email sent successfully."
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        f"Error sending email: {e}"
+                    )
