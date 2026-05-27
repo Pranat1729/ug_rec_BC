@@ -144,8 +144,7 @@ def edit_school_info(
 
     return result
 
-# ---------------- EMAIL HELPERS ---------------- #
-
+##### EMAIL FUNC######
 def is_valid_email(address):
     """Basic check: must contain @ and a dot after it."""
     address = normalize(address)
@@ -206,6 +205,7 @@ def send_confirmation_email(
 
     except Exception as e:
         return False, f"Item saved, but confirmation email failed: {e}"
+
 
 # ---------------- LOAD DATA ---------------- #
 
@@ -293,7 +293,7 @@ if st.session_state.role == "admin":
         )
 
         contact_info = st.text_input(
-            "Contact Info (Email address for shipment confirmation)"
+            "Contact Info"
         )
 
         date_sent = st.date_input(
@@ -329,22 +329,9 @@ if st.session_state.role == "admin":
                     date_sent
                 )
 
-                st.success("Item added successfully.")
-
-                # --- Auto-send confirmation email to contact ---
-                email_sent, email_msg = send_confirmation_email(
-                    recipient_email=contact_info,
-                    contact_name=contact_name,
-                    school_name=school_name,
-                    item_name=school_item,
-                    qty=school_qty,
-                    date_sent=date_sent
+                st.success(
+                    "Item added successfully."
                 )
-
-                if email_sent:
-                    st.info(email_msg)
-                else:
-                    st.warning(email_msg)
 
                 st.rerun()
 
@@ -599,3 +586,57 @@ if st.session_state.role == "admin":
                     st.error(
                         f"Error sending email: {e}"
                     )
+    ##### EMAIL CONFIRMATION #####
+
+    st.markdown("---")
+    st.subheader("Outlog Confirmation")
+
+    with st.form("confirmation_form"):
+
+        conf_recipient_email = st.selectbox(
+            "Recipient Email",
+            options=[email for email in st.session_state.get("Contact Info", [])]
+        )
+
+        conf_contact_name = st.selectbox(
+            "Contact Name",
+            options=[name for name in st.session_state.get("Contact Name", [])]
+        )
+
+        conf_school_name = st.selectbox(
+            "School Name",
+            options=[school for school in st.session_state.get("School Name", [])]
+        )
+
+        conf_item_name = st.multiselect(
+            "Item Name",
+            options=[item for item in st.session_state.get("Item Name", [])]
+        )
+
+        conf_qty = st.text_area(
+            'Quantity of Items Sent (comma-separated if multiple items)'
+        )
+
+        conf_date_sent = st.date_input(
+            "Date Sent"
+        )
+
+        conf_submitted = st.form_submit_button(
+            "Send Confirmation Email"
+        )
+
+        if conf_submitted:
+
+            success, message = send_confirmation_email(
+                conf_recipient_email,
+                conf_contact_name,
+                conf_school_name,
+                conf_item_name,
+                conf_qty,
+                conf_date_sent
+            )
+
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
