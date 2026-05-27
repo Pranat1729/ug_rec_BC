@@ -184,7 +184,7 @@ def send_confirmation_email(
         f"  Date Sent: {date_sent}\n\n"
         f"If you have any questions or concerns, please don't hesitate to reach out.\n\n"
         f"Best regards,\n"
-        f"School Inventory Team"
+        f"Brooklyn College Inventory Team"
     )
 
     try:
