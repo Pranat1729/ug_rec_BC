@@ -144,6 +144,69 @@ def edit_school_info(
 
     return result
 
+# ---------------- EMAIL HELPERS ---------------- #
+
+def is_valid_email(address):
+    """Basic check: must contain @ and a dot after it."""
+    address = normalize(address)
+    return "@" in address and "." in address.split("@")[-1]
+
+
+def send_confirmation_email(
+    recipient_email,
+    contact_name,
+    school_name,
+    item_name,
+    qty,
+    date_sent
+):
+    """
+    Send an auto-generated shipment confirmation email to the contact
+    person whenever a new inventory item is added for their school.
+    """
+    recipient_email = normalize(recipient_email)
+
+    if not is_valid_email(recipient_email):
+        return False, (
+            f"Confirmation email not sent: '{recipient_email}' "
+            "does not look like a valid email address."
+        )
+
+    greeting_name = normalize(contact_name) if normalize(contact_name) else "there"
+
+    subject = f"Shipment Confirmation – {normalize(school_name)}"
+
+    body = (
+        f"Dear {greeting_name},\n\n"
+        f"This is a confirmation that the following item has been shipped to "
+        f"{normalize(school_name)}:\n\n"
+        f"  Item:      {normalize(item_name)}\n"
+        f"  Quantity:  {int(qty)}\n"
+        f"  Date Sent: {date_sent}\n\n"
+        f"If you have any questions or concerns, please don't hesitate to reach out.\n\n"
+        f"Best regards,\n"
+        f"School Inventory Team"
+    )
+
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = st.secrets["EMAIL_ADDRESS"]
+        msg["To"] = recipient_email
+        msg.set_content(body)
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(
+                st.secrets["EMAIL_ADDRESS"],
+                st.secrets["EMAIL_PASSWORD"]
+            )
+            server.send_message(msg)
+
+        return True, f"Confirmation email sent to {recipient_email}."
+
+    except Exception as e:
+        return False, f"Item saved, but confirmation email failed: {e}"
+
 # ---------------- LOAD DATA ---------------- #
 
 school_df = load_school_data()
@@ -230,7 +293,7 @@ if st.session_state.role == "admin":
         )
 
         contact_info = st.text_input(
-            "Contact Info"
+            "Contact Info (Email address for shipment confirmation)"
         )
 
         date_sent = st.date_input(
@@ -266,9 +329,22 @@ if st.session_state.role == "admin":
                     date_sent
                 )
 
-                st.success(
-                    "Item added successfully."
+                st.success("Item added successfully.")
+
+                # --- Auto-send confirmation email to contact ---
+                email_sent, email_msg = send_confirmation_email(
+                    recipient_email=contact_info,
+                    contact_name=contact_name,
+                    school_name=school_name,
+                    item_name=school_item,
+                    qty=school_qty,
+                    date_sent=date_sent
                 )
+
+                if email_sent:
+                    st.info(email_msg)
+                else:
+                    st.warning(email_msg)
 
                 st.rerun()
 
