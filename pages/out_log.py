@@ -588,55 +588,95 @@ if st.session_state.role == "admin":
                     )
     ##### EMAIL CONFIRMATION #####
 
+    # ----- EMAIL CONFIRMATION ----- #
+
     st.markdown("---")
     st.subheader("Outlog Confirmation")
 
-    with st.form("confirmation_form"):
+    if not school_df.empty:
 
-        conf_recipient_email = st.selectbox(
-            "Recipient Email",
-            options=[email for email in st.session_state.get("Contact Info", [])]
+        email_options = sorted(
+            school_df["Contact Info"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
         )
 
-        conf_contact_name = st.selectbox(
-            "Contact Name",
-            options=[name for name in st.session_state.get("Contact Name", [])]
+        contact_options = sorted(
+            school_df["Contact Name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
         )
 
-        conf_school_name = st.selectbox(
-            "School Name",
-            options=[school for school in st.session_state.get("School Name", [])]
+        school_options_conf = sorted(
+            school_df["School Name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
         )
 
-        conf_item_name = st.multiselect(
-            "Item Name",
-            options=[item for item in st.session_state.get("Item Name", [])]
+        item_options = sorted(
+            school_df["Item Name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
         )
 
-        conf_qty = st.text_area(
-            'Quantity of Items Sent (comma-separated if multiple items)'
-        )
+        with st.form("confirmation_form"):
 
-        conf_date_sent = st.date_input(
-            "Date Sent"
-        )
-
-        conf_submitted = st.form_submit_button(
-            "Send Confirmation Email"
-        )
-
-        if conf_submitted:
-
-            success, message = send_confirmation_email(
-                conf_recipient_email,
-                conf_contact_name,
-                conf_school_name,
-                conf_item_name,
-                conf_qty,
-                conf_date_sent
+            conf_recipient_email = st.selectbox(
+                "Recipient Email",
+                options=email_options
             )
 
-            if success:
-                st.success(message)
-            else:
-                st.error(message)
+            conf_contact_name = st.selectbox(
+                "Contact Name",
+                options=contact_options
+            )
+
+            conf_school_name = st.selectbox(
+                "School Name",
+                options=school_options_conf
+            )
+
+            conf_item_name = st.multiselect(
+                "Item Name",
+                options=item_options
+            )
+
+            conf_qty = st.text_input(
+                "Quantity of Items Sent"
+            )
+
+            conf_date_sent = st.date_input(
+                "Date Sent"
+            )
+
+            conf_submitted = st.form_submit_button(
+                "Send Confirmation Email"
+            )
+
+            if conf_submitted:
+
+                success, message = send_confirmation_email(
+                    conf_recipient_email,
+                    conf_contact_name,
+                    conf_school_name,
+                    ", ".join(conf_item_name),
+                    conf_qty,
+                    conf_date_sent
+                )
+
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
+
+    else:
+
+        st.info("No inventory records available.")
