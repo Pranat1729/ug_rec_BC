@@ -180,7 +180,7 @@ def send_confirmation_email(
         f"This is a confirmation that the following item has been shipped to "
         f"{normalize(school_name)}:\n\n"
         f"  Item:      {normalize(item_name)}\n"
-        f"  Quantity:  {int(qty)}\n"
+        f"  Quantity:  {(qty)}\n"
         f"  Date Sent: {date_sent}\n\n"
         f"If you have any questions or concerns, please don't hesitate to reach out.\n\n"
         f"Best regards,\n"
