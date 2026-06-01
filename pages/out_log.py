@@ -17,8 +17,6 @@ client = MongoClient(MONGO_URI)
 db = client["InventoryDB"]
 school_inventory_col = db["SchoolInventory"]
 
-# ---------------- SESSION STATE ---------------- #
-
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -32,7 +30,6 @@ if not st.session_state.logged_in:
     st.warning("Please log in from the main inventory page.")
     st.stop()
 
-# ---------------- HELPERS ---------------- #
 
 def normalize(text):
 
@@ -53,7 +50,8 @@ def load_school_data():
         "Contact Info",
         "Item Name",
         "Quantity of Items Sent",
-        "Date Sent"
+        "Date Sent",
+        "Address"
     ]
 
     if not data:
@@ -80,7 +78,6 @@ def get_school_options(df):
         .tolist()
     )
 
-# ---------------- DATABASE OPS ---------------- #
 
 def add_school_item(
     item_name,
@@ -88,7 +85,8 @@ def add_school_item(
     school_name,
     contact_name,
     contact_info,
-    date_sent
+    date_sent,
+    address
 ):
 
     school_inventory_col.insert_one({
@@ -97,7 +95,8 @@ def add_school_item(
         "Contact Info": normalize(contact_info),
         "Item Name": normalize(item_name),
         "Quantity of Items Sent": int(qty),
-        "Date Sent": str(date_sent)
+        "Date Sent": str(date_sent),
+        "Address": normalize(address)
     })
 
 def delete_school_records(school_name):
@@ -114,7 +113,9 @@ def edit_school_info(
     new_qty,
     new_contact_name,
     new_contact_info,
-    new_date_sent
+    new_date_sent,
+    new_address
+
 ):
 
     update_fields = {}
@@ -133,6 +134,9 @@ def edit_school_info(
 
     if new_date_sent is not None:
         update_fields["Date Sent"] = str(new_date_sent)
+
+    if new_address:
+        update_fields["Address"] = normalize(new_address)
 
     if not update_fields:
         return None
@@ -157,7 +161,8 @@ def send_confirmation_email(
     school_name,
     item_name,
     qty,
-    date_sent
+    date_sent,
+    address
 ):
     """
     Send an auto-generated shipment confirmation email to the contact
@@ -176,15 +181,19 @@ def send_confirmation_email(
     subject = f"Shipment Confirmation – {normalize(school_name)}"
 
     body = (
-        f"Dear {greeting_name},\n\n"
-        f"This is a confirmation that the following item has been shipped to "
-        f"{normalize(school_name)}:\n\n"
+        f"Hello {greeting_name},\n\n"
+        f"Thank you for reaching out to the Brooklyn College Office of Undergraduate Recruitment.\n\n"
+        f"We are writing to confirm that we have sent out a shipment, which includes the following Brooklyn College merchandise to you at the address below.\n\n"
+        f"Name: {normalize(contact_name)}\n"
+        f"Address: {normalize(address)}\n\n"
+        f"The package includes the following items:\n\n"
         f"  Item:      {normalize(item_name)}\n"
-        f"  Quantity:  {(qty)}\n"
+        f"  Quantity:  {qty}\n"
         f"  Date Sent: {date_sent}\n\n"
-        f"If you have any questions or concerns, please don't hesitate to reach out.\n\n"
-        f"Best regards,\n"
-        f"Brooklyn College Inventory Team"
+        f"If you have any additional questions regarding the shipment, please feel free to contact us.\n\n"
+        f"Best regards,\n\n"
+        f"Office of Undergraduate Recruitment\n"
+        f"Brooklyn College - CUNY"
     )
 
     try:
@@ -207,11 +216,8 @@ def send_confirmation_email(
         return False, f"Item saved, but confirmation email failed: {e}"
 
 
-# ---------------- LOAD DATA ---------------- #
-
 school_df = load_school_data()
 
-# ---------------- UI ---------------- #
 
 st.title("School Inventory")
 
@@ -219,7 +225,7 @@ st.caption(
     f"Logged in as {st.session_state.username} ({st.session_state.role})"
 )
 
-# ---------------- TABLE ---------------- #
+
 
 st.subheader("Current School Inventory")
 
@@ -228,7 +234,6 @@ st.dataframe(
     use_container_width=True
 )
 
-# ---------------- SEARCH ---------------- #
 
 st.subheader("Search School Inventory")
 
@@ -259,7 +264,7 @@ if search_school_item:
             use_container_width=True
         )
 
-# ---------------- ADMIN ---------------- #
+
 
 if st.session_state.role == "admin":
 
@@ -267,7 +272,7 @@ if st.session_state.role == "admin":
         school_df
     )
 
-    # ---------- ADD ---------- #
+
 
     st.markdown("---")
     st.subheader("Add School Inventory Item")
@@ -335,8 +340,6 @@ if st.session_state.role == "admin":
 
                 st.rerun()
 
-    # ---------- DELETE ---------- #
-
     st.markdown("---")
     st.subheader("Delete School Records")
 
@@ -377,7 +380,6 @@ if st.session_state.role == "admin":
 
         st.info("No schools available.")
 
-    # ---------- EDIT ---------- #
 
     st.markdown("---")
     st.subheader("Edit School Info")
@@ -476,7 +478,7 @@ if st.session_state.role == "admin":
 
         st.info("No schools available.")
 
-    # ---------- EMAIL ---------- #
+
 
     st.markdown("---")
     st.subheader("Email Inventory")
@@ -588,8 +590,6 @@ if st.session_state.role == "admin":
                     )
     ##### EMAIL CONFIRMATION #####
 
-    # ----- EMAIL CONFIRMATION ----- #
-
     st.markdown("---")
     st.subheader("Outlog Confirmation")
 
@@ -613,6 +613,14 @@ if st.session_state.role == "admin":
 
         school_options_conf = sorted(
             school_df["School Name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+        address_options = sorted(
+            school_df["Address"]
             .dropna()
             .astype(str)
             .unique()
@@ -644,6 +652,11 @@ if st.session_state.role == "admin":
                 options=school_options_conf
             )
 
+            conf_address = st.selectbox(
+                "Address",
+                options=address_options
+            )
+
             conf_item_name = st.multiselect(
                 "Item Name",
                 options=item_options
@@ -669,7 +682,8 @@ if st.session_state.role == "admin":
                     conf_school_name,
                     ", ".join(conf_item_name),
                     conf_qty,
-                    conf_date_sent
+                    conf_date_sent,
+                    conf_address
                 )
 
                 if success:
