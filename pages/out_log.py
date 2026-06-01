@@ -17,6 +17,8 @@ client = MongoClient(MONGO_URI)
 db = client["InventoryDB"]
 school_inventory_col = db["SchoolInventory"]
 
+# ---------------- SESSION STATE ---------------- #
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -30,6 +32,7 @@ if not st.session_state.logged_in:
     st.warning("Please log in from the main inventory page.")
     st.stop()
 
+# ---------------- HELPERS ---------------- #
 
 def normalize(text):
 
@@ -78,6 +81,7 @@ def get_school_options(df):
         .tolist()
     )
 
+# ---------------- DATABASE OPS ---------------- #
 
 def add_school_item(
     item_name,
@@ -216,8 +220,11 @@ def send_confirmation_email(
         return False, f"Item saved, but confirmation email failed: {e}"
 
 
+# ---------------- LOAD DATA ---------------- #
+
 school_df = load_school_data()
 
+# ---------------- UI ---------------- #
 
 st.title("School Inventory")
 
@@ -225,7 +232,7 @@ st.caption(
     f"Logged in as {st.session_state.username} ({st.session_state.role})"
 )
 
-
+# ---------------- TABLE ---------------- #
 
 st.subheader("Current School Inventory")
 
@@ -234,6 +241,7 @@ st.dataframe(
     use_container_width=True
 )
 
+# ---------------- SEARCH ---------------- #
 
 st.subheader("Search School Inventory")
 
@@ -264,7 +272,7 @@ if search_school_item:
             use_container_width=True
         )
 
-
+# ---------------- ADMIN ---------------- #
 
 if st.session_state.role == "admin":
 
@@ -272,7 +280,7 @@ if st.session_state.role == "admin":
         school_df
     )
 
-
+    # ---------- ADD ---------- #
 
     st.markdown("---")
     st.subheader("Add School Inventory Item")
@@ -299,6 +307,10 @@ if st.session_state.role == "admin":
 
         contact_info = st.text_input(
             "Contact Info"
+        )
+
+        school_address = st.text_input(
+            "Address"
         )
 
         date_sent = st.date_input(
@@ -331,7 +343,8 @@ if st.session_state.role == "admin":
                     school_name,
                     contact_name,
                     contact_info,
-                    date_sent
+                    date_sent,
+                    school_address
                 )
 
                 st.success(
@@ -339,6 +352,8 @@ if st.session_state.role == "admin":
                 )
 
                 st.rerun()
+
+    # ---------- DELETE ---------- #
 
     st.markdown("---")
     st.subheader("Delete School Records")
@@ -380,6 +395,7 @@ if st.session_state.role == "admin":
 
         st.info("No schools available.")
 
+    # ---------- EDIT ---------- #
 
     st.markdown("---")
     st.subheader("Edit School Info")
@@ -409,10 +425,14 @@ if st.session_state.role == "admin":
                 "New Contact Info"
             )
 
+            new_address = st.text_input(
+                "New Address"
+            )
+
             update_date = st.checkbox(
                 "Update Date"
             )
-
+    
             new_date_sent = None
 
             if update_date:
@@ -451,7 +471,8 @@ if st.session_state.role == "admin":
                     new_qty,
                     new_contact_name,
                     new_contact_info,
-                    new_date_sent
+                    new_date_sent,
+                    new_address
                 )
 
                 if result is None:
@@ -478,7 +499,7 @@ if st.session_state.role == "admin":
 
         st.info("No schools available.")
 
-
+    # ---------- EMAIL ---------- #
 
     st.markdown("---")
     st.subheader("Email Inventory")
@@ -589,6 +610,8 @@ if st.session_state.role == "admin":
                         f"Error sending email: {e}"
                     )
     ##### EMAIL CONFIRMATION #####
+
+    # ----- EMAIL CONFIRMATION ----- #
 
     st.markdown("---")
     st.subheader("Outlog Confirmation")
