@@ -185,19 +185,13 @@ def send_confirmation_email(
     subject = f"Shipment Confirmation – {normalize(school_name)}"
 
     body = (
-        f"Hello {greeting_name},\n\n"
-        f"Thank you for reaching out to the Brooklyn College Office of Undergraduate Recruitment.\n\n"
-        f"We are writing to confirm that we have sent out a shipment, which includes the following Brooklyn College merchandise to you at the address below.\n\n"
-        f"Name: {normalize(contact_name)}\n"
-        f"Address: {normalize(address)}\n\n"
-        f"The package includes the following items:\n\n"
-        f"  Item:      {normalize(item_name)}\n"
-        f"  Quantity:  {qty}\n"
-        f"  Date Sent: {date_sent}\n\n"
-        f"If you have any additional questions regarding the shipment, please feel free to contact us.\n\n"
-        f"Best regards,\n\n"
-        f"Office of Undergraduate Recruitment\n"
-        f"Brooklyn College - CUNY"
+        f"Thank You!\n\n"
+        f"Thank you for connecting with Brooklyn College!\n\n"
+        f"We hope you enjoy this Brooklyn College merchandise. BC merch reflects the spirit and pride of our institution. "
+        f"We sincerely appreciate your partnership and look forward to our continued engagement.\n\n"
+        f"Sincerely,\n\n"
+        f"Dania Safder\n"
+        f"Brooklyn College Recruitment Office"
     )
 
     try:
@@ -609,6 +603,7 @@ if st.session_state.role == "admin":
                     st.error(
                         f"Error sending email: {e}"
                     )
+
     ##### EMAIL CONFIRMATION #####
 
     # ----- EMAIL CONFIRMATION ----- #
